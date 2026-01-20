@@ -1,0 +1,16 @@
+[package]
+name = "ga-sim"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# crabtime is broken on nightly, so we use a fork to fix it
+# see https://github.com/wdanilo/crabtime/pull/41
+crabtime = { git = "https://github.com/Nekomaru-PKU/crabtime" }
+csv = "1.4.0"
+glam = "0.30.10"
+itertools = "0.14.0"
+libm = "0.2.15"
+obvhs = "0.2.2"
+paste = "1.0.15"
+tobj = "4.0.3"
