@@ -1,4 +1,4 @@
-use std::{cell::RefCell, mem::ManuallyDrop, ops::Mul};
+use std::{ops::Mul};
 
 use glam::Vec3A;
 use obvhs::{
@@ -38,8 +38,8 @@ pub fn rt_specular_cpu<F: SimulationFrequency>(
                 || EnergyHistogram::new(histogram_bin_count, sample_rate),
                 |mut local_histogram, seed_direction: Vec3A| {
                     let seed_ray = Ray::new_inf(
-                        unsafe { std::mem::transmute(microphone.position) },
-                        unsafe { std::mem::transmute(seed_direction) },
+                        microphone.position,
+                        seed_direction,
                     );
                     trace::<F, _>(
                         &scene,
@@ -68,8 +68,8 @@ pub fn rt_specular_cpu<F: SimulationFrequency>(
 
         iter.into_iter().for_each(|seed_direction: Vec3A| {
             let seed_ray = Ray::new_inf(
-                unsafe { std::mem::transmute(microphone.position) },
-                unsafe { std::mem::transmute(seed_direction) },
+                microphone.position,
+                seed_direction,
             );
 
             trace::<F, _>(
@@ -102,7 +102,7 @@ pub fn specular_procedure<F: SimulationFrequency>(
         scene,
         microphone,
         histogram,
-        unsafe { std::mem::transmute(current_pos) },
+        current_pos,
         in_energy,
     );
 
@@ -115,6 +115,7 @@ pub fn specular_procedure<F: SimulationFrequency>(
 }
 
 /// A sub-procedure for microphone traceback from location `current_pos`.
+#[inline(never)]
 pub fn microphone_traceback<F: SimulationFrequency>(
     scene: &Scene,
     microphone: &Microphone,
@@ -124,9 +125,7 @@ pub fn microphone_traceback<F: SimulationFrequency>(
 ) {
     let microphone_pos = microphone.position;
 
-    let mic_ray = Ray::new_inf(unsafe { std::mem::transmute(current_pos) }, unsafe {
-        std::mem::transmute((microphone_pos - current_pos).normalize())
-    });
+    let mic_ray = Ray::new_inf(current_pos, (microphone_pos - current_pos).normalize());
 
     let mut hit = RayHit::none();
     if !scene

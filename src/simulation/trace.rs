@@ -50,5 +50,7 @@ pub fn trace<F: SimulationFrequency, P>(
         scene, microphone, histogram, in_ray, hit.t, triangle, material, in_energy,
     );
 
-    trace::<F, P>(scene, microphone, new_ray, histogram, new_energy, procedure)
+    if new_energy > ENERGY_CUTOFF {
+        trace::<F, P>(scene, microphone, new_ray, histogram, new_energy, procedure)
+    }
 }

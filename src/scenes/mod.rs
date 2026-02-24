@@ -81,9 +81,9 @@ impl Scene {
                         );
 
                         Some(RtCompressedTriangle::new(
-                            unsafe { std::mem::transmute(v0) },
-                            unsafe { std::mem::transmute(v1) },
-                            unsafe { std::mem::transmute(v2) },
+                            v0,
+                            v1,
+                            v2,
                         ))
                     })
                     .collect::<Vec<RtCompressedTriangle>>();

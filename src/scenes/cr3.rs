@@ -7,7 +7,7 @@ pub fn load_bras_cr3() -> Scene {
     fn root(ext: &str) -> PathBuf {
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path.push(PathBuf::from(
-            "../_TU_BERLIN_ACOUSTIC_BENCHES/1_scene_descriptions-CR3/_WORKING_DIR/",
+            "../../_TU_BERLIN_ACOUSTIC_BENCHES/1_scene_descriptions-CR3/_WORKING_DIR/",
         ));
         path.push(PathBuf::from(ext));
         path
