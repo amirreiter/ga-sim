@@ -29,7 +29,7 @@ macro_rules! define_simulation_frequency {
                     // we make rust_analyzer think the frequency alpha value is always -1.0
                     //
                     // The test uses this to check if crabtime is working or not.
-                    #[cfg(not(rust_analyzer))]
+                    #[cfg(not(test))]
                     {
                         // This is from ISO 9613-1:1993
                         crabtime::eval! {{
@@ -61,7 +61,7 @@ macro_rules! define_simulation_frequency {
                         }}
                     }
 
-                    #[cfg(rust_analyzer)]
+                    #[cfg(test)]
                     {
                         -1.0
                     }

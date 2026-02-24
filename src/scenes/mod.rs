@@ -80,7 +80,11 @@ impl Scene {
                             positions[indicies[2] as usize + 2],
                         );
 
-                        Some(RtCompressedTriangle::new(v0, v1, v2))
+                        Some(RtCompressedTriangle::new(
+                            unsafe { std::mem::transmute(v0) },
+                            unsafe { std::mem::transmute(v1) },
+                            unsafe { std::mem::transmute(v2) },
+                        ))
                     })
                     .collect::<Vec<RtCompressedTriangle>>();
 
