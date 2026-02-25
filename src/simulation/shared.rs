@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub struct EnergyHistogram {
     pub inner: Vec<f32>,
     pub sample_rate: f32,

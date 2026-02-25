@@ -1,6 +1,6 @@
 use glam::Vec3A;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use std::f32::consts::{PI, GOLDEN_RATIO};
+use std::f32::consts::{GOLDEN_RATIO, PI};
 
 const GOLDEN_ANGLE: f32 = 2.39996322973;
 

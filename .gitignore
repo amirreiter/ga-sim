@@ -1,3 +1,8 @@
 /target
 .DS_Store
 profile.json
+build_for_instruments.sh
+instruments.plist
+data_proc
+.venv
+data.wav

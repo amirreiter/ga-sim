@@ -15,8 +15,9 @@ pub fn load_bras_cr3() -> Scene {
 
     // These are identified visually matching the Virtual Sketchup viewer in the browser
     // with the material colors in blender.
-    //
+
     // Materials 0, 1, and 2 are dedicated to an X,Y,Z axis placed in the center of the scene.
+    // TODO: This is not the case anymore.
 
     // mat_CR3_plaster
     let mat3 = SurfaceMaterial::from_csv(&root("mat_CR3_plaster.csv"));

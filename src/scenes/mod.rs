@@ -18,6 +18,8 @@ pub struct Scene {
     pub material_indicies: Vec<u8>,
     pub materials: Vec<SurfaceMaterial>,
     pub accelerator: CwBvh,
+    pub accelerator_id_to_tri: Vec<RtTriangle>,
+    pub accelerator_id_to_material: Vec<SurfaceMaterial>,
 }
 
 impl Scene {
@@ -31,8 +33,7 @@ impl Scene {
                     .chunks_exact(3)
                     .enumerate()
                     .filter_map(|(_chunk_index, _indicies)| match model.mesh.material_id {
-                        Some(0..3) => None,
-                        Some(i) => Some((i - 3) as u8),
+                        Some(i) => Some(i as u8),
                         None => None,
                     })
                     .collect()
@@ -53,38 +54,17 @@ impl Scene {
                     .chunks_exact(3)
                     .enumerate()
                     .filter_map(|(_chunk_index, indicies)| {
-                        let material_id: Option<usize> = match model.mesh.material_id {
-                            Some(0..3) => None,
-                            Some(i) => Some(i - 3),
-                            None => None,
-                        };
-
-                        if material_id.is_none() {
-                            return None;
-                        }
                         // Materials are saved in a separate iterator.
 
-                        let v0 = Vec3A::new(
-                            positions[indicies[0] as usize + 0],
-                            positions[indicies[0] as usize + 1],
-                            positions[indicies[0] as usize + 2],
-                        );
-                        let v1 = Vec3A::new(
-                            positions[indicies[1] as usize + 0],
-                            positions[indicies[1] as usize + 1],
-                            positions[indicies[1] as usize + 2],
-                        );
-                        let v2 = Vec3A::new(
-                            positions[indicies[2] as usize + 0],
-                            positions[indicies[2] as usize + 1],
-                            positions[indicies[2] as usize + 2],
-                        );
+                        let i0 = (indicies[0] as usize) * 3;
+                        let i1 = (indicies[1] as usize) * 3;
+                        let i2 = (indicies[2] as usize) * 3;
 
-                        Some(RtCompressedTriangle::new(
-                            v0,
-                            v1,
-                            v2,
-                        ))
+                        let v0 = Vec3A::new(positions[i0], positions[i0 + 1], positions[i0 + 2]);
+                        let v1 = Vec3A::new(positions[i1], positions[i1 + 1], positions[i1 + 2]);
+                        let v2 = Vec3A::new(positions[i2], positions[i2 + 1], positions[i2 + 2]);
+
+                        Some(RtCompressedTriangle::new(v0, v1, v2))
                     })
                     .collect::<Vec<RtCompressedTriangle>>();
 
@@ -109,12 +89,29 @@ impl Scene {
             &mut Duration::ZERO.clone(), // Not using Cwbvh build profiling
         );
 
+        // Accelerate OBVHS lookups.
+        let accelerator_id_to_tri: Vec<RtTriangle> = accelerator
+            .primitive_indices
+            .iter()
+            .map(|&original_idx| triangles[original_idx as usize].clone())
+            .collect();
+
+        let accelerator_id_to_material: Vec<SurfaceMaterial> = accelerator
+            .primitive_indices
+            .iter()
+            .map(|&original_idx| {
+                materials[material_indicies[original_idx as usize] as usize].clone()
+            })
+            .collect();
+
         Scene {
             triangles,
             gpu_triangles,
             material_indicies,
             materials,
             accelerator,
+            accelerator_id_to_tri,
+            accelerator_id_to_material,
         }
     }
 }

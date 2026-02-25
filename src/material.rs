@@ -1,5 +1,6 @@
 use std::path::Path;
 
+#[derive(Clone)]
 pub struct SurfaceMaterial {
     pub ac_63hz: f32,
     pub sc_63hz: f32,
