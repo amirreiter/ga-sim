@@ -8,7 +8,7 @@ use crate::{
     scenes::Scene, simulation::shared::EnergyHistogram,
 };
 
-const ENERGY_CUTOFF: f32 = 0.01;
+const ENERGY_CUTOFF: f32 = 0.001;
 
 /// A generic trace function skeletion which raytraces a scene, running a procedure
 /// at every intersection.

@@ -3,7 +3,8 @@ use std::time::Instant;
 use glam::Vec3A;
 use hound;
 
-use crate::{frequency::F_63_HZ, microphone::Microphone, simulation::rt_specular_cpu};
+use crate::{frequency::*, microphone::Microphone, scenes::Scene, simulation::{EnergyHistogram, rt_specular_cpu}};
+use render::render;
 
 mod fibonacci;
 mod frequency;
@@ -11,30 +12,36 @@ mod material;
 mod microphone;
 mod scenes;
 mod simulation;
+mod render;
 
 fn main() {
     let scene = scenes::cr3::load_bras_cr3();
 
-    let microphone = Microphone {
+    let mic = Microphone {
         position: Vec3A::new(3.62673, 8.95161, 0.0),
     };
-    let sample_rate = 48_000.0;
-    let ray_count = 1_000_000;
-    let histogram_bin_count = sample_rate as usize * 3;
+    let sample_rate = 48_000.0 / 4.0;
+    let rays = 1_000_000u64;
+    let bins = sample_rate as usize * 2;
 
     let start = Instant::now();
 
-    let energy = rt_specular_cpu::<F_63_HZ>(
-        true,
-        scene,
-        microphone,
-        Vec3A::new(-1.75653, 5.00912, 0.0),
-        sample_rate,
-        ray_count,
-        histogram_bin_count,
-    );
+    let mut energy_histograms = Vec::new();
+
+    // Manually call for each required frequency band
+    energy_histograms.push(get_energy::<F_63_HZ>(&scene, &mic, sample_rate, rays, bins));
+    energy_histograms.push(get_energy::<F_125_HZ>(&scene, &mic, sample_rate, rays, bins));
+    energy_histograms.push(get_energy::<F_250_HZ>(&scene, &mic, sample_rate, rays, bins));
+    energy_histograms.push(get_energy::<F_500_HZ>(&scene, &mic, sample_rate, rays, bins));
+    energy_histograms.push(get_energy::<F_1000_HZ>(&scene, &mic, sample_rate, rays, bins));
+    energy_histograms.push(get_energy::<F_2000_HZ>(&scene, &mic, sample_rate, rays, bins));
+    energy_histograms.push(get_energy::<F_4000_HZ>(&scene, &mic, sample_rate, rays, bins));
+    energy_histograms.push(get_energy::<F_8000_HZ>(&scene, &mic, sample_rate, rays, bins));
+    energy_histograms.push(get_energy::<F_16000_HZ>(&scene, &mic, sample_rate, rays, bins));
 
     println!("{:?}", start.elapsed());
+
+    let rendered = render(48_000.0, energy_histograms);
 
     let spec = hound::WavSpec {
         channels: 1,
@@ -43,8 +50,30 @@ fn main() {
         sample_format: hound::SampleFormat::Float,
     };
     let mut writer = hound::WavWriter::create("data.wav", spec).unwrap();
-    for (i, s) in energy.inner.iter().enumerate() {
+    for s in rendered.iter() {
         writer.write_sample(*s).unwrap();
     }
     writer.finalize().unwrap();
+}
+
+fn get_energy<F>(
+    scene: &Scene,
+    microphone: &Microphone,
+    sample_rate: f32,
+    ray_count: u64,
+    bin_count: usize
+) -> (f32, EnergyHistogram)
+where F: SimulationFrequency
+{
+    let freq_hz = F::hz() as f32;
+    let energy = rt_specular_cpu::<F>(
+        true,
+        scene,
+        microphone,
+        Vec3A::new(-1.75653, 5.00912, 0.0),
+        sample_rate,
+        ray_count,
+        bin_count,
+    );
+    (freq_hz, energy)
 }

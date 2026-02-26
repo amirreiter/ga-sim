@@ -23,8 +23,8 @@ const SPEED_OF_SOUND: f32 = 343.0;
 /// or multi-threaded.
 pub fn rt_specular_cpu<F: SimulationFrequency>(
     multithread: bool,
-    scene: Scene,
-    microphone: Microphone,
+    scene: &Scene,
+    microphone: &Microphone,
     emitter: Vec3A,
     sample_rate: f32,
     ray_count: u64,
