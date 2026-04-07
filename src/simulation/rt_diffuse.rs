@@ -1,10 +1,7 @@
-use std::{cell::RefCell, ops::Mul, sync::Arc};
+use std::{cell::RefCell, sync::Arc};
 
 use glam::Vec3A;
-use obvhs::{
-    ray::{Ray, RayHit},
-    rt_triangle::RtTriangle,
-};
+use obvhs::{ray::Ray, rt_triangle::RtTriangle};
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use thread_local::ThreadLocal;
 
@@ -13,13 +10,14 @@ use crate::{
     frequency::SimulationFrequency,
     material::SurfaceMaterial,
     microphone::Microphone,
+    random::sample_hemisphere,
     scenes::Scene,
-    simulation::{shared::EnergyHistogram, trace::{SPEED_OF_SOUND, microphone_traceback, trace}},
+    simulation::{EnergyHistogram, trace::{SPEED_OF_SOUND, microphone_traceback, trace}},
 };
 
-/// A specular raytracing simulation that runs on the CPU, either single-threaded
+/// A diffuse raytracing simulation that runs on the CPU, either single-threaded
 /// or multi-threaded.
-pub fn rt_specular_cpu<F: SimulationFrequency>(
+pub fn rt_diffuse_cpu<F: SimulationFrequency, const BranchCount: u32>(
     multithread: bool,
     scene: &Scene,
     microphone: &Microphone,
@@ -44,14 +42,14 @@ pub fn rt_specular_cpu<F: SimulationFrequency>(
 
                 let seed_ray = Ray::new_inf(emitter, seed_direction);
 
-                trace::<F, _, 1>(
+                trace::<F, _, BranchCount>(
                     &scene,
                     &microphone,
                     seed_ray,
                     &mut *local_histogram.borrow_mut(),
                     1.0,
                     0.0,
-                    specular_procedure::<F>,
+                    diffuse_procedure::<F>,
                 );
             },
         );
@@ -92,14 +90,14 @@ pub fn rt_specular_cpu<F: SimulationFrequency>(
         iter.into_iter().for_each(|seed_direction: Vec3A| {
             let seed_ray = Ray::new_inf(emitter, seed_direction);
 
-            trace::<F, _, 1>(
+            trace::<F, _, BranchCount>(
                 &scene,
                 &microphone,
                 seed_ray,
                 &mut histogram,
                 1.0,
                 0.0,
-                specular_procedure::<F>,
+                diffuse_procedure::<F>,
             );
         });
 
@@ -107,8 +105,8 @@ pub fn rt_specular_cpu<F: SimulationFrequency>(
     }
 }
 
-/// The core procedure for a specular pass.
-pub fn specular_procedure<F: SimulationFrequency>(
+/// The core procedure for a diffuse pass.
+pub fn diffuse_procedure<F: SimulationFrequency>(
     scene: &Scene,
     microphone: &Microphone,
     histogram: &mut EnergyHistogram,
@@ -120,7 +118,7 @@ pub fn specular_procedure<F: SimulationFrequency>(
     in_energy: f32,
 ) -> (Ray, f32, f32) {
     let current_pos = ray.origin + ray.direction * ray_t;
-    let energy_after_travel = in_energy; // * distance_travelled / SPEED_OF_SOUND;// * F::air_alpha().powf(distance_travelled);
+    let energy_after_travel = in_energy;// * distance_travelled / SPEED_OF_SOUND; // F::air_alpha().powf(distance_travelled);
 
     microphone_traceback::<F>(
         scene,
@@ -131,10 +129,13 @@ pub fn specular_procedure<F: SimulationFrequency>(
         distance_travelled,
     );
 
-    let out_dir = ray.direction.reflect(triangle.compute_normal());
-    let out_ray = Ray::new_inf(current_pos, out_dir);
-    // TODO: Make 1-ac const
-    let out_energy = energy_after_travel * (1.0 - F::ac(material)) * (1.0 - F::sc(material));
+    let tri_normal = triangle.compute_normal();
+    let out_dir = ray.direction.reflect(tri_normal);
+    let out_ray = Ray::new_inf(current_pos, sample_hemisphere(tri_normal));
 
-    (out_ray, out_energy, distance_travelled + ray_t)
+    // TODO: Make 1-ac const
+    let out_energy =
+        energy_after_travel * (1.0 - F::ac(material)) * F::sc(material) * tri_normal.angle_between(out_dir).cos();
+
+    (out_ray, out_energy, distance_travelled)
 }

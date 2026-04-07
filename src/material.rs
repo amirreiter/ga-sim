@@ -49,6 +49,10 @@ impl SurfaceMaterial {
             .expect("Missing scattering coefficients row")
             .expect("Error reading scattering coefficients");
 
+        // println!("{:?}", rdr.headers().unwrap());
+        // println!("{:?}", ac_row);
+        // println!("{:?}\n---", sc_row);
+
         // Parse the values from columns
         let ac_63hz: f32 = ac_row[5].trim().parse().unwrap();
         let sc_63hz: f32 = sc_row[5].trim().parse().unwrap();

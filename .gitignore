@@ -5,4 +5,4 @@ build_for_instruments.sh
 instruments.plist
 data_proc
 .venv
-data.wav
+*.wav

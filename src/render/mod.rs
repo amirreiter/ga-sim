@@ -1,14 +1,22 @@
 use crate::simulation::EnergyHistogram;
 
-use fundsp::{prelude::AudioNode, prelude32 as dsp};
-use rand::RngExt;
+use fundsp::prelude32::*;
+use rand::{RngExt, rngs::ThreadRng};
 
 pub fn render(sample_rate: f32, mut energy_histograms: Vec<(f32, EnergyHistogram)>) -> Vec<f32> {
-    let max_value = 1.0 / energy_histograms
-        .iter()
-        .map(|(_, h)| h.inner.iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap())
-        .max_by(|a, b| a.partial_cmp(b).unwrap())
-        .unwrap();
+    energy_histograms.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+
+    let max_value = 1.0
+        / energy_histograms
+            .iter()
+            .map(|(_, h)| {
+                h.inner
+                    .iter()
+                    .max_by(|a, b| a.partial_cmp(b).unwrap())
+                    .unwrap()
+            })
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap();
 
     energy_histograms.iter_mut().for_each(|(_, histogram)| {
         histogram.scale(max_value);
@@ -25,21 +33,31 @@ pub fn render(sample_rate: f32, mut energy_histograms: Vec<(f32, EnergyHistogram
         return Vec::new();
     }
 
-    let mut rng: rand::rngs::StdRng = rand::SeedableRng::seed_from_u64(12345);
     let uniform =
         rand::distr::Uniform::new_inclusive(-1.0, 1.0).expect("Failed to create distribution");
 
-    let white_noise: Vec<f32> = (0..render_samples).map(|_| rng.sample(uniform)).collect();
-
     let mut result: Vec<f32> = vec![0.0; render_samples];
 
-    for (freq, histogram) in energy_histograms.iter_mut() {
-        let mut filter = dsp::bandpass_hz(*freq, 1.414);
+    let num_histograms = energy_histograms.len();
+
+    for (index, (freq, histogram)) in energy_histograms.iter_mut().enumerate() {
+        let mut filter: An<Unit<U1, U1>> = {
+            if index == 0 {
+                // println!("first filter");
+                unit(Box::new(lowpass_hz(*freq, 1.414)))
+            } else if index == (num_histograms - 1) {
+                // println!("last filter");
+                unit(Box::new(highpass_hz(*freq, 1.414)))
+            } else {
+                // println!("middle filter");
+                unit(Box::new(bandpass_hz(*freq, 1.414)))
+            }
+        };
         filter.set_sample_rate(sample_rate as f64);
         filter.allocate();
 
         for i in 0..render_samples {
-            let filtered_sample = filter.filter_mono(white_noise[i]);
+            let filtered_sample = filter.filter_mono(ThreadRng::default().sample(uniform));
             let envelope = histogram.inner[i];
 
             result[i] += filtered_sample * envelope;
