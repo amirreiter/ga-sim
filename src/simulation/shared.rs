@@ -1,4 +1,10 @@
-#[derive(Debug)]
+use std::sync::atomic::AtomicU64;
+
+pub static DEBUG_LEAK_COUNTER: AtomicU64 = AtomicU64::new(0);
+pub static DEBUG_MIC_HITS: AtomicU64 = AtomicU64::new(0);
+pub static DEBUG_MIC_HITS_OUT_OF_BOUNDS: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Debug, Clone)]
 pub struct EnergyHistogram {
     pub inner: Vec<f32>,
     pub sample_rate: f32,

@@ -45,9 +45,31 @@ pub fn trace<F: SimulationFrequency, P, const BranchCount: u32>(
         scene.accelerator_id_to_tri[id].intersect(ray)
         // scene.triangles[scene.accelerator.primitive_indices[id] as usize].intersect(ray)
     }) {
-        println!("LEAK!");
+        println!(
+            "LEAK! trace miss: origin=({:.6}, {:.6}, {:.6}) dir=({:.6}, {:.6}, {:.6}) in_energy={:.6} distance_travelled={:.6}",
+            in_ray.origin.x,
+            in_ray.origin.y,
+            in_ray.origin.z,
+            in_ray.direction.x,
+            in_ray.direction.y,
+            in_ray.direction.z,
+            in_energy,
+            distance_travelled
+        );
         return;
     }
+
+    println!(
+        "TRACE HIT: t={:.6} primitive_id={} origin=({:.6}, {:.6}, {:.6}) dir=({:.6}, {:.6}, {:.6})",
+        hit.t,
+        hit.primitive_id,
+        in_ray.origin.x,
+        in_ray.origin.y,
+        in_ray.origin.z,
+        in_ray.direction.x,
+        in_ray.direction.y,
+        in_ray.direction.z
+    );
 
     let primitive_id_usize = hit.primitive_id as usize;
 
@@ -59,7 +81,7 @@ pub fn trace<F: SimulationFrequency, P, const BranchCount: u32>(
     // let material = &scene.materials[scene.material_indicies[primitive_id_usize] as usize];
 
     unroll!(_ in 0..BranchCount => {
-        let (new_ray, new_energy, distance_travelled) = procedure(
+        let (new_ray, new_energy, new_distance_travelled) = procedure(
             scene,
             microphone,
             histogram,
@@ -78,7 +100,7 @@ pub fn trace<F: SimulationFrequency, P, const BranchCount: u32>(
                 new_ray,
                 histogram,
                 new_energy,// / BranchCount as f32,
-                distance_travelled,
+                new_distance_travelled,
                 procedure,
             )
         }
@@ -100,6 +122,20 @@ pub fn microphone_traceback<F: SimulationFrequency>(
     // let distance_to_microphone = last_ray.origin.distance(microphone_pos); //intersect_ray_sphere(&last_ray, &microphone.position);
 
     if distance_to_microphone == f32::INFINITY {
+        println!(
+            "MIC TRACEBACK MISS SPHERE: origin=({:.6}, {:.6}, {:.6}) dir=({:.6}, {:.6}, {:.6}) mic=({:.6}, {:.6}, {:.6}) in_energy={:.6} distance_travelled={:.6}",
+            last_ray.origin.x,
+            last_ray.origin.y,
+            last_ray.origin.z,
+            last_ray.direction.x,
+            last_ray.direction.y,
+            last_ray.direction.z,
+            microphone.position.x,
+            microphone.position.y,
+            microphone.position.z,
+            in_energy,
+            distance_travelled
+        );
         return;
     }
 
@@ -111,6 +147,16 @@ pub fn microphone_traceback<F: SimulationFrequency>(
             // scene.triangles[scene.accelerator.primitive_indices[id] as usize].intersect(ray)
         })
     {
+        println!(
+            "MIC LEAK 2! occlusion trace miss: origin=({:.6}, {:.6}, {:.6}) dir=({:.6}, {:.6}, {:.6}) dist_to_mic={:.6}",
+            last_ray.origin.x,
+            last_ray.origin.y,
+            last_ray.origin.z,
+            last_ray.direction.x,
+            last_ray.direction.y,
+            last_ray.direction.z,
+            distance_to_microphone
+        );
         return;
     }
 
@@ -121,8 +167,24 @@ pub fn microphone_traceback<F: SimulationFrequency>(
         if bucket < histogram.inner.len() {
             // TODO: Multiply by microphone bias.
             let contribution = in_energy; // * (distance_to_microphone) / SPEED_OF_SOUND;// * F::air_alpha().powf(distance_to_microphone);
-            // println!("{}", contribution);
+            println!(
+                "MIC CONTRIBUTION: bucket={} contribution={:.6} hit_t={:.6} dist_to_mic={:.6} total_dist={:.6}",
+                bucket,
+                contribution,
+                hit.t,
+                distance_to_microphone,
+                distance_travelled + distance_to_microphone
+            );
             histogram.inner[bucket] += contribution;
+        } else {
+            println!(
+                "NO BUCKET EXISTS! bucket={} len={} dist_to_mic={:.6} distance_travelled={:.6} sample_rate={:.3}",
+                bucket,
+                histogram.inner.len(),
+                distance_to_microphone,
+                distance_travelled,
+                histogram.sample_rate
+            );
         }
     }
 }

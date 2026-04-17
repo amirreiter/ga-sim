@@ -1,10 +1,7 @@
-use std::{cell::RefCell, ops::Mul, sync::Arc};
+use std::{cell::RefCell, sync::Arc};
 
 use glam::Vec3A;
-use obvhs::{
-    ray::{Ray, RayHit},
-    rt_triangle::RtTriangle,
-};
+use obvhs::{ray::Ray, rt_triangle::RtTriangle};
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use thread_local::ThreadLocal;
 
@@ -14,7 +11,7 @@ use crate::{
     material::SurfaceMaterial,
     microphone::Microphone,
     scenes::Scene,
-    simulation::{shared::EnergyHistogram, trace::{SPEED_OF_SOUND, microphone_traceback, trace}},
+    simulation::{shared::EnergyHistogram, trace::{microphone_traceback, trace}},
 };
 
 /// A specular raytracing simulation that runs on the CPU, either single-threaded
@@ -42,7 +39,12 @@ pub fn rt_specular_cpu<F: SimulationFrequency>(
                     RefCell::new(EnergyHistogram::new(histogram_bin_count, sample_rate))
                 });
 
-                let seed_ray = Ray::new_inf(emitter, seed_direction);
+                let seed_dir = seed_direction.normalize_or_zero();
+                if seed_dir.length_squared() == 0.0 {
+                    return;
+                }
+
+                let seed_ray = Ray::new_inf(emitter, seed_dir);
 
                 trace::<F, _, 1>(
                     &scene,
@@ -90,7 +92,12 @@ pub fn rt_specular_cpu<F: SimulationFrequency>(
         let mut histogram = EnergyHistogram::new(histogram_bin_count, sample_rate);
 
         iter.into_iter().for_each(|seed_direction: Vec3A| {
-            let seed_ray = Ray::new_inf(emitter, seed_direction);
+            let seed_dir = seed_direction.normalize_or_zero();
+            if seed_dir.length_squared() == 0.0 {
+                return;
+            }
+
+            let seed_ray = Ray::new_inf(emitter, seed_dir);
 
             trace::<F, _, 1>(
                 &scene,
@@ -119,20 +126,82 @@ pub fn specular_procedure<F: SimulationFrequency>(
     material: &SurfaceMaterial,
     in_energy: f32,
 ) -> (Ray, f32, f32) {
-    let current_pos = ray.origin + ray.direction * ray_t;
+    const EPSILON: f32 = 0.001;
+
+    let in_dir = ray.direction.normalize_or_zero();
+    if in_dir.length_squared() == 0.0 {
+        println!(
+            "[SPECULAR_SANITY] zero in_dir; origin=({:.6}, {:.6}, {:.6}), direction=({:.6}, {:.6}, {:.6}), ray_t={:.6}, distance_travelled={:.6}, in_energy={:.6}",
+            ray.origin.x,
+            ray.origin.y,
+            ray.origin.z,
+            ray.direction.x,
+            ray.direction.y,
+            ray.direction.z,
+            ray_t,
+            distance_travelled,
+            in_energy
+        );
+        return (ray, 0.0, distance_travelled);
+    }
+
+    let hit_pos = ray.origin + in_dir * ray_t;
     let energy_after_travel = in_energy; // * distance_travelled / SPEED_OF_SOUND;// * F::air_alpha().powf(distance_travelled);
 
+    let normalized_ray = Ray::new_inf(ray.origin, in_dir);
     microphone_traceback::<F>(
         scene,
         microphone,
         histogram,
-        ray,
+        normalized_ray,
         in_energy,
         distance_travelled,
     );
 
-    let out_dir = ray.direction.reflect(triangle.compute_normal());
-    let out_ray = Ray::new_inf(current_pos, out_dir);
+    let mut n = triangle.compute_normal().normalize_or_zero();
+    if n.length_squared() == 0.0 {
+        let raw_n = triangle.compute_normal();
+        println!(
+            "[SPECULAR_SANITY] zero surface normal; raw_normal=({:.6}, {:.6}, {:.6}), hit_pos=({:.6}, {:.6}, {:.6}), ray_t={:.6}, distance_travelled={:.6}, in_energy={:.6}",
+            raw_n.x,
+            raw_n.y,
+            raw_n.z,
+            hit_pos.x,
+            hit_pos.y,
+            hit_pos.z,
+            ray_t,
+            distance_travelled,
+            in_energy
+        );
+        return (ray, 0.0, distance_travelled + ray_t);
+    }
+    if in_dir.dot(n) > 0.0 {
+        n = -n;
+    }
+
+    let out_dir = in_dir.reflect(n).normalize_or_zero();
+    if out_dir.length_squared() == 0.0 {
+        println!(
+            "[SPECULAR_SANITY] zero out_dir; in_dir=({:.6}, {:.6}, {:.6}), normal=({:.6}, {:.6}, {:.6}), hit_pos=({:.6}, {:.6}, {:.6}), ray_t={:.6}, distance_travelled={:.6}, in_energy={:.6}",
+            in_dir.x,
+            in_dir.y,
+            in_dir.z,
+            n.x,
+            n.y,
+            n.z,
+            hit_pos.x,
+            hit_pos.y,
+            hit_pos.z,
+            ray_t,
+            distance_travelled,
+            in_energy
+        );
+        return (ray, 0.0, distance_travelled + ray_t);
+    }
+
+    let out_origin = hit_pos + out_dir * EPSILON;
+    let out_ray = Ray::new_inf(out_origin, out_dir);
+
     // TODO: Make 1-ac const
     let out_energy = energy_after_travel * (1.0 - F::ac(material)) * (1.0 - F::sc(material));
 

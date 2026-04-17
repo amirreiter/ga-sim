@@ -1,6 +1,7 @@
 pub mod cr3;
 
-use std::time::Duration;
+use std::io::Write;
+use std::{fs::File, io::BufWriter, time::Duration};
 
 use glam::Vec3A;
 use obvhs::{
@@ -75,11 +76,20 @@ impl Scene {
             .flatten()
             .collect();
 
-        let triangles: Vec<RtTriangle> = gpu_triangles
+        let triangles: Vec<RtTriangle> = obj
             .iter()
-            .map(|gpu_tri| {
-                let unpack = gpu_tri.unpack();
-                RtTriangle::new(unpack.0, unpack.1, unpack.2)
+            .flat_map(|model| {
+                let positions = &model.mesh.positions;
+                model.mesh.indices.chunks_exact(3).map(|indices| {
+                    let i0 = (indices[0] as usize) * 3;
+                    let i1 = (indices[1] as usize) * 3;
+                    let i2 = (indices[2] as usize) * 3;
+                    let v0 = Vec3A::new(positions[i0], positions[i0+1], positions[i0+2]);
+                    let v1 = Vec3A::new(positions[i1], positions[i1+1], positions[i1+2]);
+                    let v2 = Vec3A::new(positions[i2], positions[i2+1], positions[i2+2]);
+                    RtTriangle::new(v0, v1, v2)
+                })
+                .collect::<Vec<_>>()
             })
             .collect();
 
@@ -113,5 +123,39 @@ impl Scene {
             accelerator_id_to_tri,
             accelerator_id_to_material,
         }
+    }
+}
+
+impl Scene {
+    pub fn save_to_obj(&self, path: &str) -> std::io::Result<()> {
+        let file = File::create(path)?;
+        let mut writer = BufWriter::new(file);
+
+        writeln!(writer, "# Exported from Rust Simulation Scene")?;
+
+        // 1. Write all vertices
+        // We use the original triangles list to ensure we have a stable vertex set
+        for tri in &self.triangles {
+            for v in [tri.v0, tri.v0 - tri.e1, tri.v0 + tri.e2] {
+                writeln!(writer, "v {} {} {}", v.x, v.y, v.z)?;
+            }
+        }
+
+        // 2. Write faces
+        // Since we wrote 3 vertices per triangle above,
+        // triangle i uses vertices (i*3)+1, (i*3)+2, (i*3)+3
+        for i in 0..self.triangles.len() {
+            let start_idx = i * 3 + 1;
+            writeln!(
+                writer,
+                "f {} {} {}",
+                start_idx,
+                start_idx + 1,
+                start_idx + 2
+            )?;
+        }
+
+        writer.flush()?;
+        Ok(())
     }
 }

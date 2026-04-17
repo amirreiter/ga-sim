@@ -27,9 +27,9 @@ impl FibonacciSphere {
         let i = index as f32;
         let y = 1.0 - i * inv_delta;
         let r = (1.0 - y * y).sqrt();
-        let θ = GOLDEN_RATIO * i;
+        let theta = GOLDEN_RATIO * i;
 
-        Vec3A::new(θ.cos() * r, y, θ.sin() * r)
+        Vec3A::new(theta.cos() * r, y, theta.sin() * r).normalize()
     }
 
     pub fn into_par_iter(self) -> impl ParallelIterator<Item = Vec3A> {
