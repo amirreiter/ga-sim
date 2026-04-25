@@ -1,11 +1,13 @@
 // mod rt_specular;
 mod shared;
-mod rt_cpu;
+mod cpu;
 // mod trace;
 // mod rt_diffuse;
 
 pub use shared::EnergyHistogram;
-pub use rt_cpu::cpu_stochastic_rt;
+
+pub use cpu::rt_specular::cpu_rt_stochastic_specular;
+pub use cpu::rt_diffuse::cpu_rt_stochastic_diffuse;
 
 pub use shared::DEBUG_LEAK_COUNTER;
 pub use shared::DEBUG_MIC_HITS;

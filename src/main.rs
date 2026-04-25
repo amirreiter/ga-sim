@@ -1,16 +1,23 @@
-#![feature(iter_advance_by)]
 use std::{sync::atomic::Ordering, time::Instant};
 
 use glam::Vec3A;
-use hound;
+use hound::{self, WavReader};
 
 use crate::{
-    frequency::*, microphone::Microphone, render::render, scenes::Scene, simulation::{
+    analysis::{
+        analyze_and_plot_energy_deviation, analyze_and_plot_energy_deviation_from_histograms,
+    },
+    frequency::*,
+    microphone::Microphone,
+    render::render,
+    scenes::Scene,
+    simulation::{
         DEBUG_LEAK_COUNTER, DEBUG_MIC_HITS, DEBUG_MIC_HITS_OUT_OF_BOUNDS, EnergyHistogram,
-        cpu_stochastic_rt,
-    }
+        cpu_rt_stochastic_diffuse, cpu_rt_stochastic_specular,
+    },
 };
 
+mod analysis;
 mod fibonacci;
 mod frequency;
 mod material;
@@ -40,26 +47,13 @@ fn estimate_scene_aabb_volume(scene: &Scene) -> f32 {
 fn main() {
     let scene = scenes::cr3::load_bras_cr3();
 
-    println!("{}", scene.gpu_triangles[0].unpack().0);
-
     let mic = Microphone {
         position: Vec3A::new(4.52566, -2.92411, 0.333065),
     };
-    let sample_rate = 48_000.0 / 48.0;
-    let rays = 100_000u64;
-    let bins = sample_rate as usize;
 
-    // Manually call for each required frequency band
-    // energy_histograms.push(get_energy::<F_63_HZ>(&scene, &mic, sample_rate, rays, bins));
-    // energy_histograms.push(get_energy::<F_125_HZ>(&scene, &mic, sample_rate, rays, bins));
-    // energy_histograms.push(get_energy::<F_250_HZ>(&scene, &mic, sample_rate, rays, bins));
-    // energy_histograms.push(get_energy::<F_500_HZ>(&scene, &mic, sample_rate, rays, bins));
-    // energy_histograms.push(get_energy::<F_1000_HZ>(&scene, &mic, sample_rate, rays, bins));
-    // energy_histograms.push(get_energy::<F_2000_HZ>(&scene, &mic, sample_rate, rays, bins));
-    // energy_histograms.push(get_energy::<F_4000_HZ>(&scene, &mic, sample_rate, rays, bins));
-    // energy_histograms.push(get_energy::<F_8000_HZ>(&scene, &mic, sample_rate, rays, bins));
-    // energy_histograms.push(get_energy::<F_16000_HZ>(&scene, &mic, sample_rate, rays, bins));
-    // let rendered = render::render(48_000.0, energy_histograms);
+    let sample_rate = 48_000.0 / 48.0;
+    let rays = 1_000_000u64;
+    let bins = (sample_rate * 3.5) as usize;
 
     let spec = hound::WavSpec {
         channels: 1,
@@ -68,61 +62,113 @@ fn main() {
         sample_format: hound::SampleFormat::Float,
     };
 
-    // let mut writer = hound::WavWriter::create("ir.wav", spec).unwrap();
-    // for s in rendered.iter() {
-    //     writer.write_sample(*s).unwrap();
-    // }
-    // writer.finalize().unwrap();
-
     let start = Instant::now();
-    let mut energy_histograms = cpu_stochastic_rt(
-        false,
+    let mut specular = cpu_rt_stochastic_specular::<true>(
+        true,
         &scene,
         &mic,
         Vec3A::new(4.52566, -2.92411, 0.333065),
         sample_rate,
         rays,
         bins,
-    ).to_vec();
-    println!("{:?}", start.elapsed());
+    )
+    .to_vec();
+    println!("Specular: {:?}", start.elapsed());
 
-    println!(
-        "leaks        : {}    /    {}",
-        DEBUG_LEAK_COUNTER.load(Ordering::SeqCst),
-        rays
-    );
-    println!(
-        "    {:.2}% success rate",
-        100.0 - (DEBUG_LEAK_COUNTER.load(Ordering::SeqCst) as f32 / rays as f32) * 100.0
-    );
-    println!(
-        "histogram oob: {}    /    {}",
-        DEBUG_MIC_HITS_OUT_OF_BOUNDS.load(Ordering::SeqCst),
-        DEBUG_MIC_HITS.load(Ordering::SeqCst)
-    );
-    println!(
-        "    {:.2}%",
-        (DEBUG_MIC_HITS_OUT_OF_BOUNDS.load(Ordering::SeqCst) as f32
-            / DEBUG_MIC_HITS.load(Ordering::SeqCst) as f32)
-            * 100.0
+    // let start = Instant::now();
+    // let diffuse = cpu_rt_stochastic_diffuse::<2>(
+    //     true,
+    //     &scene,
+    //     &mic,
+    //     Vec3A::new(4.52566, -2.92411, 0.333065),
+    //     sample_rate,
+    //     rays,
+    //     bins,
+    // )
+    // .to_vec();
+    // println!("Diffuse: {:?}", start.elapsed());
+
+    // specular.iter_mut().zip(diffuse.iter()).for_each(|(s, d)| {
+    //     s.add(d);
+    // });
+
+    let mut energy_histograms = specular;
+    // let mut energy_histograms = diffuse;
+
+    // println!(
+    //     "leaks        : {}    /    {}",
+    //     DEBUG_LEAK_COUNTER.load(Ordering::SeqCst),
+    //     rays
+    // );
+    // println!(
+    //     "    {:.2}% success rate",
+    //     100.0 - (DEBUG_LEAK_COUNTER.load(Ordering::SeqCst) as f32 / rays as f32) * 100.0
+    // );
+    // println!(
+    //     "histogram oob: {}    /    {}",
+    //     DEBUG_MIC_HITS_OUT_OF_BOUNDS.load(Ordering::SeqCst),
+    //     DEBUG_MIC_HITS.load(Ordering::SeqCst)
+    // );
+    // println!(
+    //     "    {:.2}%",
+    //     (DEBUG_MIC_HITS_OUT_OF_BOUNDS.load(Ordering::SeqCst) as f32
+    //         / DEBUG_MIC_HITS.load(Ordering::SeqCst) as f32)
+    //         * 100.0
+    // );
+
+    let ehc = energy_histograms.clone();
+
+    let samples = render(
+        48_000.0,
+        vec![
+            (62.5, energy_histograms.remove(0)),
+            (125.0, energy_histograms.remove(0)),
+            (250.0, energy_histograms.remove(0)),
+            (500.0, energy_histograms.remove(0)),
+            (1000.0, energy_histograms.remove(0)),
+            (2000.0, energy_histograms.remove(0)),
+            (4000.0, energy_histograms.remove(0)),
+            (8000.0, energy_histograms.remove(0)),
+            (16000.0, energy_histograms.remove(0)),
+        ],
+        estimate_scene_aabb_volume(&scene),
+        343.0,
     );
 
-    let samples = render(48_000.0, vec![
-        (125.0, energy_histograms.remove(0)),
-        (250.0, energy_histograms.remove(0)),
-        (500.0, energy_histograms.remove(0)),
-        (1000.0, energy_histograms.remove(0)),
-        (2000.0, energy_histograms.remove(0)),
-        (4000.0, energy_histograms.remove(0)),
-        (8000.0, energy_histograms.remove(0)),
-        (16000.0, energy_histograms.remove(0)),
-    ], estimate_scene_aabb_volume(&scene), 343.0, 400.0);
+    let mut energy_histograms = ehc;
 
-    let mut writer = hound::WavWriter::create("125hz.wav", spec).unwrap();
+    let mut writer = hound::WavWriter::create("simulated_ir.wav", spec).unwrap();
     for s in samples.iter() {
         writer.write_sample(*s).unwrap();
     }
     writer.finalize().unwrap();
+
+    let benchmark: Vec<f32> = WavReader::open("/Users/amirreiter/Github/_TU_BERLIN_ACOUSTIC_BENCHES/1_scene_descriptions-CR3/1 Scene descriptions/CR3 medium room (chamber music hall)/RIRs/wav/CR3_RIR_LS1_MP1_Dodecahedron.wav")
+        .unwrap()
+        .samples()
+        .map(|s| s.unwrap())
+        .collect();
+
+    analyze_and_plot_energy_deviation(&samples, &benchmark, 48_000.0, 2048 * 3, 512 * 3).unwrap();
+
+    analyze_and_plot_energy_deviation_from_histograms(
+        &vec![
+            (62.5, energy_histograms.remove(0)),
+            (125.0, energy_histograms.remove(0)),
+            (250.0, energy_histograms.remove(0)),
+            (500.0, energy_histograms.remove(0)),
+            (1000.0, energy_histograms.remove(0)),
+            (2000.0, energy_histograms.remove(0)),
+            (4000.0, energy_histograms.remove(0)),
+            (8000.0, energy_histograms.remove(0)),
+            (16000.0, energy_histograms.remove(0)),
+        ],
+        &benchmark,
+        sample_rate,
+        2048 * 3,
+        512 * 3,
+    )
+    .unwrap();
 
     // let mut writer = hound::WavWriter::create("diffuse.wav", spec).unwrap();
     // for s in diffuse.inner.iter() {
@@ -130,44 +176,3 @@ fn main() {
     // }
     // writer.finalize().unwrap();
 }
-
-// fn get_energy<F>(
-//     scene: &Scene,
-//     microphone: &Microphone,
-//     sample_rate: f32,
-//     ray_count: u64,
-//     bin_count: usize,
-// ) -> (f32, EnergyHistogram)
-// where
-//     F: SimulationFrequency,
-// {
-//     let freq_hz = F::hz() as f32;
-
-//     let start = Instant::now();
-
-//     let mut specular = rt_specular_cpu::<F>(
-//         true,
-//         scene,
-//         microphone,
-//         Vec3A::new(-1.75653, 5.00912, 0.0),
-//         sample_rate,
-//         ray_count,
-//         bin_count,
-//     );
-
-//     let diffuse = rt_diffuse_cpu::<F, 1>(
-//         true,
-//         scene,
-//         microphone,
-//         Vec3A::new(-1.75653, 5.00912, 0.0),
-//         sample_rate,
-//         ray_count,
-//         bin_count,
-//     );
-
-//     println!("F {} - {:?}", freq_hz, Instant::now().duration_since(start));
-
-//     specular.add(&diffuse);
-
-//     (freq_hz, specular)
-// }

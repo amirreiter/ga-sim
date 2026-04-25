@@ -7,7 +7,7 @@ pub fn load_bras_cr3() -> Scene {
     fn root(ext: &str) -> PathBuf {
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path.push(PathBuf::from(
-            "../../_TU_BERLIN_ACOUSTIC_BENCHES/1_scene_descriptions-CR3/_WORKING_DIR/",
+            "../../_TU_BERLIN_ACOUSTIC_BENCHES/1_scene_descriptions-CR3/_WORKING_DIR",
         ));
         path.push(PathBuf::from(ext));
         path
@@ -53,7 +53,14 @@ pub fn load_bras_cr3() -> Scene {
 
     let scene = Scene::from_obj(obj, vec![mat3, mat4, mat5, mat6, mat7, mat8, mat9]);
 
-    scene.save_to_obj("/Users/amirreiter/Downloads/test.obj").unwrap();
+    // scene
+    //     .materials
+    //     .iter()
+    //     .for_each(|s| println!("{}", s.sc_125hz));
+
+    scene
+        .save_to_obj("/Users/amirreiter/Downloads/test.obj")
+        .unwrap();
 
     scene
 }

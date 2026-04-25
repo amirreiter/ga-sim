@@ -1,6 +1,6 @@
 use glam::Vec3A;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use std::f32::consts::{GOLDEN_RATIO, PI};
+use std::f32::consts::{GOLDEN_RATIO};
 
 const GOLDEN_ANGLE: f32 = 2.39996322973;
 
@@ -23,7 +23,7 @@ impl FibonacciSphere {
     }
 
     #[inline]
-    fn compute(index: u64, samples: u64, inv_delta: f32) -> Vec3A {
+    fn compute(index: u64, _samples: u64, inv_delta: f32) -> Vec3A {
         let i = index as f32;
         let y = 1.0 - i * inv_delta;
         let r = (1.0 - y * y).sqrt();
@@ -90,11 +90,11 @@ impl FibonacciHemisphere {
     #[inline]
     fn compute(i: u64, basis: &[Vec3A; 3], inv_n: f32) -> Vec3A {
         let idx = i as f32;
-        let θ = idx * GOLDEN_ANGLE;
+        let theta = idx * GOLDEN_ANGLE;
         let y = 1.0 - (idx + 0.5) * inv_n;
         let r = (1.0 - y * y).max(0.0).sqrt();
 
-        let local = Vec3A::new(θ.cos() * r, y, θ.sin() * r);
+        let local = Vec3A::new(theta.cos() * r, y, theta.sin() * r);
 
         basis[0] * local.x + basis[1] * local.z + basis[2] * local.y
     }

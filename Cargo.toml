@@ -7,8 +7,13 @@ edition = "2024"
 lto = "thin"
 debug = true
 
+[profile.release.package."*"]
+debug = true
+
 [dependencies]
 wisc = { git = "https://github.com/amirreiter/wisc.git" }
+obvhs = { git = "https://github.com/amirreiter/obvhs.git" }
+# obvhs = { path = "/Users/amirreiter/Github/amirreiter/obvhs" }
 
 # crabtime is broken on nightly, so we use a fork to fix it
 # see https://github.com/wdanilo/crabtime/pull/41
@@ -16,7 +21,6 @@ crabtime = { git = "https://github.com/Nekomaru-PKU/crabtime.git" }
 csv = "1.4.0"
 glam = { version = "0.32", features = ["rand"] }
 itertools = "0.14.0"
-obvhs = { git = "https://github.com/amirreiter/obvhs.git" }
 paste = "1.0.15"
 tobj = "4.0.3"
 rayon = "1.12.0"
@@ -27,3 +31,4 @@ fundsp = "0.23.0"
 rand = "0.10.1"
 unroll-lite = "0.1.0"
 rustfft = "6.4.1"
+plotters = "0.3.7"

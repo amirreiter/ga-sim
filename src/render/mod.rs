@@ -272,7 +272,6 @@ pub fn render(
     mut energy_histograms: Vec<(f32, EnergyHistogram)>,
     room_volume: f32,
     speed_of_sound: f32,
-    acoustic_impedance: f32,
 ) -> Vec<f32> {
     if energy_histograms.is_empty() || sample_rate <= 0.0 {
         return Vec::new();
@@ -332,7 +331,7 @@ pub fn render(
             histogram,
             &dirac_sequence,
             sample_rate,
-            acoustic_impedance,
+            400.0
         );
 
         let mut band_signal = vec![0.0f32; render_samples];
