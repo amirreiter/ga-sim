@@ -206,13 +206,13 @@ fn kernel_cpu_rt_stochastic_diffuse<const BRANCH_COUNT: usize>(
         out_energy[8] = in_energy[8] * (1.0 - material.ac_16000hz) * (material.sc_16000hz);
 
         let out_ray_direction = random_vector_off_normal(normal, rng);
-        let lambert_factor = normal.angle_between(out_ray_direction).cos().abs();
+        let lambert_factor = normal.dot(out_ray_direction).abs();
 
         unroll_lite::unroll!(i in 0..9 => {
             out_energy[i] = out_energy[i] * lambert_factor;
         });
 
-        let should_continue = out_energy.iter().any(|&e| e > ENERGY_CUTOFF * 0.1);
+        let should_continue = out_energy.iter().any(|&e| e > ENERGY_CUTOFF);
 
         if !should_continue {
             return; // End recursive trace

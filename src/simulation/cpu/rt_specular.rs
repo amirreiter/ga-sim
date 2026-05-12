@@ -196,7 +196,7 @@ fn kernel_rt_cpu_stochastic_specular<const DIFFUSE_RETURN: bool>(
     let triangle = &scene.accelerator_id_to_tri[hit.primitive_id as usize];
     let geometric_normal = triangle.compute_normal();
 
-    // Flip normal to face the incoming ray (i.e., the side the ray came from)
+    // Flip normal to face the incoming ray (the side the ray came from)
     let normal = if geometric_normal.dot(-in_ray.direction) < 0.0 {
         -geometric_normal
     } else {
@@ -223,7 +223,7 @@ fn kernel_rt_cpu_stochastic_specular<const DIFFUSE_RETURN: bool>(
                 scene.accelerator_id_to_tri[id].intersect(ray)
             })
         {
-            hit.t = return_distance + 1e-3;
+            hit.t = return_distance + 1e-3; // epsilon value
         }
 
         if return_distance < hit.t {

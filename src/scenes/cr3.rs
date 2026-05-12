@@ -15,6 +15,7 @@ pub fn load_bras_cr3() -> Scene {
 
     // These are identified visually matching the Virtual Sketchup viewer in the browser
     // with the material colors in blender.
+    // They appear to be right.
 
     // Materials 0, 1, and 2 are dedicated to an X,Y,Z axis placed in the center of the scene.
     // TODO: This is not the case anymore.
@@ -52,15 +53,6 @@ pub fn load_bras_cr3() -> Scene {
     .expect("Failed to load CR3_BRIR model");
 
     let scene = Scene::from_obj(obj, vec![mat3, mat4, mat5, mat6, mat7, mat8, mat9]);
-
-    // scene
-    //     .materials
-    //     .iter()
-    //     .for_each(|s| println!("{}", s.sc_125hz));
-
-    scene
-        .save_to_obj("/Users/amirreiter/Downloads/test.obj")
-        .unwrap();
 
     scene
 }

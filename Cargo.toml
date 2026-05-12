@@ -13,7 +13,6 @@ debug = true
 [dependencies]
 wisc = { git = "https://github.com/amirreiter/wisc.git" }
 obvhs = { git = "https://github.com/amirreiter/obvhs.git" }
-# obvhs = { path = "/Users/amirreiter/Github/amirreiter/obvhs" }
 
 # crabtime is broken on nightly, so we use a fork to fix it
 # see https://github.com/wdanilo/crabtime/pull/41

@@ -15,7 +15,6 @@ pub fn analyze_and_plot_energy_deviation(
     window_size: usize,
     hop_size: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // --- 1. Peak Normalization ---
     let normalize = |data: &[f32]| -> Vec<f32> {
         let peak = data.iter().map(|&x| x.abs()).fold(0.0, f32::max);
         if peak > 0.0 {
@@ -44,7 +43,6 @@ pub fn analyze_and_plot_energy_deviation(
         .map(|i| 0.5 * (1.0 - (2.0 * PI * i as f32 / (window_size - 1) as f32).cos()))
         .collect();
 
-    // --- 2. Processing Loop ---
     let mut start = 0;
     while start + window_size <= max_samples {
         time_axis.push(start as f32 / sample_rate);
@@ -99,26 +97,10 @@ pub fn analyze_and_plot_energy_deviation(
         start += hop_size;
     }
 
-    // --- 3. Dynamic Y-Axis Bounds ---
-    let all_values: Vec<f32> = band_deviations
-        .iter()
-        .flatten()
-        .chain(total_deviations.iter())
-        .cloned()
-        .collect();
-    let mut min_y = all_values.iter().fold(f32::INFINITY, |a, &b| a.min(b));
-    let mut max_y = all_values.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+    // We can auto fit, but data beyond the 60dB range is not super helpful
+    let min_y = -60.0f32;//all_values.iter().fold(f32::INFINITY, |a, &b| a.min(b));
+    let max_y = 60.0f32;//all_values.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
 
-    // Force a minimum visual range if the simulation is near-perfect
-    if (max_y - min_y).abs() < 1.0 {
-        min_y = -1.0;
-        max_y = 1.0;
-    } else {
-        min_y -= 1.0; // Margin
-        max_y += 1.0;
-    }
-
-    // --- 4. Plotting ---
     let root =
         BitMapBackend::new("Simulation_Energy_Deviation.png", (1920, 1080)).into_drawing_area();
     root.fill(&WHITE)?;
@@ -176,10 +158,10 @@ pub fn analyze_and_plot_energy_deviation(
                 .iter()
                 .cloned()
                 .zip(total_deviations.iter().cloned()),
-            BLACK.stroke_width(5),
+            BLACK.stroke_width(6),
         ))?
         .label("Total Wideband")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 30, y)], BLACK.stroke_width(5)));
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 30, y)], BLACK.stroke_width(6)));
 
     chart
         .configure_series_labels()
@@ -199,14 +181,12 @@ pub fn analyze_and_plot_energy_deviation_from_histograms(
     window_size: usize,
     hop_size: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // --- 1. Validate inputs ---
     if sim_histograms.is_empty() {
         return Err("Sim energy histograms cannot be empty".into());
     }
 
     let num_sim_frames = sim_histograms[0].1.inner.len();
 
-    // --- 2. Normalize bench PCM by peak amplitude ---
     let normalize = |data: &[f32]| -> Vec<f32> {
         let peak = data.iter().map(|&x| x.abs()).fold(0.0f32, f32::max);
         if peak > 0.0 {
@@ -221,9 +201,6 @@ pub fn analyze_and_plot_energy_deviation_from_histograms(
         return Err("Bench PCM is shorter than window size".into());
     }
 
-    // --- 3. Normalize sim histograms globally (single peak across all bands and frames),
-    //        so inter-band amplitude relationships are preserved — matching how bench PCM
-    //        is normalized by its single global peak before FFT analysis. ---
     let sim_global_peak = sim_histograms
         .iter()
         .flat_map(|(_, h)| h.inner.iter())
@@ -242,7 +219,6 @@ pub fn analyze_and_plot_energy_deviation_from_histograms(
         })
         .collect();
 
-    // --- 4. FFT setup for bench ---
     let mut planner = FftPlanner::new();
     let fft = planner.plan_fft_forward(window_size);
 
@@ -254,7 +230,6 @@ pub fn analyze_and_plot_energy_deviation_from_histograms(
     let mut total_deviations: Vec<f32> = Vec::new();
     let mut time_axis: Vec<f32> = Vec::new();
 
-    // --- 5. Processing loop — driven by bench PCM windows ---
     let mut start = 0;
     let mut frame = 0;
     while start + window_size <= bench_norm.len() && frame < num_sim_frames {
@@ -283,14 +258,6 @@ pub fn analyze_and_plot_energy_deviation_from_histograms(
             }
         }
 
-        // Accumulate sim energy per band and total from histogram frame.
-        //
-        // Key fixes vs. original:
-        //   • Frequency matching uses a ±5 % relative tolerance so high-frequency
-        //     bands (kHz range) are found even when the stored freq label is slightly off.
-        //   • sim_energy is the energy value directly from the (globally-normalized)
-        //     histogram — it is NOT squared again, because it is already an energy
-        //     quantity, not an amplitude.
         let mut sim_total_en = 0.0f32;
         for (band_idx, &center) in OCTAVE_CENTERS.iter().enumerate() {
             let sim_energy = sim_norm_hists
@@ -299,7 +266,6 @@ pub fn analyze_and_plot_energy_deviation_from_histograms(
                 .and_then(|(_, hist)| hist.get(frame).copied())
                 .unwrap_or(0.0);
 
-            // sim_energy is already an energy (power) value; use it directly.
             sim_total_en += sim_energy;
 
             let dev = 10.0 * (sim_energy + 1e-12).log10()
@@ -314,7 +280,6 @@ pub fn analyze_and_plot_energy_deviation_from_histograms(
         frame += 1;
     }
 
-    // --- 6. Dynamic Y-Axis Bounds ---
     let all_values: Vec<f32> = band_deviations
         .iter()
         .flatten()
@@ -333,7 +298,6 @@ pub fn analyze_and_plot_energy_deviation_from_histograms(
         max_y += 1.0;
     }
 
-    // --- 7. Plotting ---
     let root = BitMapBackend::new("Simulation_Energy_Histogram_Deviation.png", (1920, 1080))
         .into_drawing_area();
     root.fill(&WHITE)?;

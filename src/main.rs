@@ -1,19 +1,17 @@
-use std::{sync::atomic::Ordering, time::Instant};
+use std::{time::Instant};
 
 use glam::Vec3A;
 use hound::{self, WavReader};
 
 use crate::{
     analysis::{
-        analyze_and_plot_energy_deviation, analyze_and_plot_energy_deviation_from_histograms,
+        analyze_and_plot_energy_deviation,
     },
-    frequency::*,
     microphone::Microphone,
     render::render,
     scenes::Scene,
     simulation::{
-        DEBUG_LEAK_COUNTER, DEBUG_MIC_HITS, DEBUG_MIC_HITS_OUT_OF_BOUNDS, EnergyHistogram,
-        cpu_rt_stochastic_diffuse, cpu_rt_stochastic_specular,
+        cpu_rt_stochastic_diffuse,
     },
 };
 
@@ -62,21 +60,8 @@ fn main() {
         sample_format: hound::SampleFormat::Float,
     };
 
-    let start = Instant::now();
-    let mut specular = cpu_rt_stochastic_specular::<true>(
-        true,
-        &scene,
-        &mic,
-        Vec3A::new(4.52566, -2.92411, 0.333065),
-        sample_rate,
-        rays,
-        bins,
-    )
-    .to_vec();
-    println!("Specular: {:?}", start.elapsed());
-
     // let start = Instant::now();
-    // let diffuse = cpu_rt_stochastic_diffuse::<2>(
+    // let mut specular = cpu_rt_stochastic_specular::<true>(
     //     true,
     //     &scene,
     //     &mic,
@@ -86,14 +71,27 @@ fn main() {
     //     bins,
     // )
     // .to_vec();
-    // println!("Diffuse: {:?}", start.elapsed());
+    // println!("Specular: {:?}", start.elapsed());
+
+    let start = Instant::now();
+    let diffuse = cpu_rt_stochastic_diffuse::<2>(
+        true,
+        &scene,
+        &mic,
+        Vec3A::new(4.52566, -2.92411, 0.333065),
+        sample_rate,
+        rays,
+        bins,
+    )
+    .to_vec();
+    println!("Diffuse: {:?}", start.elapsed());
 
     // specular.iter_mut().zip(diffuse.iter()).for_each(|(s, d)| {
     //     s.add(d);
     // });
 
-    let mut energy_histograms = specular;
-    // let mut energy_histograms = diffuse;
+    // let mut energy_histograms = specular;
+    let mut energy_histograms = diffuse;
 
     // println!(
     //     "leaks        : {}    /    {}",
@@ -143,32 +141,32 @@ fn main() {
     }
     writer.finalize().unwrap();
 
-    let benchmark: Vec<f32> = WavReader::open("/Users/amirreiter/Github/_TU_BERLIN_ACOUSTIC_BENCHES/1_scene_descriptions-CR3/1 Scene descriptions/CR3 medium room (chamber music hall)/RIRs/wav/CR3_RIR_LS1_MP1_Dodecahedron.wav")
+    let benchmark: Vec<f32> = WavReader::open("/../../_TU_BERLIN_ACOUSTIC_BENCHES/1_scene_descriptions-CR3/1 Scene descriptions/CR3 medium room (chamber music hall)/RIRs/wav/CR3_RIR_LS1_MP1_Dodecahedron.wav")
         .unwrap()
         .samples()
         .map(|s| s.unwrap())
         .collect();
 
-    analyze_and_plot_energy_deviation(&samples, &benchmark, 48_000.0, 2048 * 3, 512 * 3).unwrap();
+    analyze_and_plot_energy_deviation(&samples, &benchmark, 48_000.0, 8192, 2048).unwrap();
 
-    analyze_and_plot_energy_deviation_from_histograms(
-        &vec![
-            (62.5, energy_histograms.remove(0)),
-            (125.0, energy_histograms.remove(0)),
-            (250.0, energy_histograms.remove(0)),
-            (500.0, energy_histograms.remove(0)),
-            (1000.0, energy_histograms.remove(0)),
-            (2000.0, energy_histograms.remove(0)),
-            (4000.0, energy_histograms.remove(0)),
-            (8000.0, energy_histograms.remove(0)),
-            (16000.0, energy_histograms.remove(0)),
-        ],
-        &benchmark,
-        sample_rate,
-        2048 * 3,
-        512 * 3,
-    )
-    .unwrap();
+    // analyze_and_plot_energy_deviation_from_histograms(
+    //     &vec![
+    //         (62.5, energy_histograms.remove(0)),
+    //         (125.0, energy_histograms.remove(0)),
+    //         (250.0, energy_histograms.remove(0)),
+    //         (500.0, energy_histograms.remove(0)),
+    //         (1000.0, energy_histograms.remove(0)),
+    //         (2000.0, energy_histograms.remove(0)),
+    //         (4000.0, energy_histograms.remove(0)),
+    //         (8000.0, energy_histograms.remove(0)),
+    //         (16000.0, energy_histograms.remove(0)),
+    //     ],
+    //     &benchmark,
+    //     sample_rate,
+    //     8192,
+    //     2048,
+    // )
+    // .unwrap();
 
     // let mut writer = hound::WavWriter::create("diffuse.wav", spec).unwrap();
     // for s in diffuse.inner.iter() {
