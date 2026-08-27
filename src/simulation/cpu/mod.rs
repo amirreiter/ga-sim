@@ -2,11 +2,10 @@ use glam::Vec3A;
 use obvhs::ray::Ray;
 use rand::{RngExt, rngs::ThreadRng};
 
-pub mod rt_specular;
-pub mod rt_diffuse;
+pub mod singleband;
 
 pub const SPEED_OF_SOUND: f32 = 343.0;
-pub const ENERGY_CUTOFF: f32 = 0.00001;
+pub const ENERGY_CUTOFF: f32 = f32::EPSILON;
 
 pub fn intersect_ray_sphere(r: &Ray, center: &Vec3A, radius_sq: f32) -> f32 {
     let p = r.origin;
@@ -38,7 +37,7 @@ pub fn intersect_ray_sphere(r: &Ray, center: &Vec3A, radius_sq: f32) -> f32 {
     f32::INFINITY
 }
 
-pub fn random_vector_off_normal(normal: Vec3A, rng: &mut ThreadRng) -> Vec3A {
+pub fn sample_cosine_weighted_hemisphere(normal: Vec3A, rng: &mut ThreadRng) -> Vec3A {
     let theta = rng.random::<f32>() * std::f32::consts::TAU;
     let cos_phi = rng.random::<f32>().sqrt(); // cosine-weighted; remove sqrt for uniform
     let sin_phi = (1.0 - cos_phi * cos_phi).sqrt();

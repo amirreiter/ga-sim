@@ -11,7 +11,7 @@ RACA-CON presentation, this rewrite uses the BRAS standard acoustical dataset
 from the Technical University of Berlin, which has higher resolution
 measurements than the toy models that were approximated in the RACA-CON version.
 
-![](/PrototypeDeviations.png)
+![](/DeviationNormalized.png)
 
 ## Research Objectives and Status
 

@@ -6,8 +6,7 @@ mod cpu;
 
 pub use shared::EnergyHistogram;
 
-pub use cpu::rt_specular::cpu_rt_stochastic_specular;
-pub use cpu::rt_diffuse::cpu_rt_stochastic_diffuse;
+pub use cpu::singleband::cpu_rt_stochastic_singleband;
 
 pub use shared::DEBUG_LEAK_COUNTER;
 pub use shared::DEBUG_MIC_HITS;

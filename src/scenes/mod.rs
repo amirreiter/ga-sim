@@ -15,7 +15,7 @@ use crate::material::SurfaceMaterial;
 
 pub struct Scene {
     pub triangles: Vec<RtTriangle>,
-    pub gpu_triangles: Vec<RtCompressedTriangle>,
+    // pub gpu_triangles: Vec<RtCompressedTriangle>,
     pub material_indicies: Vec<u8>,
     pub materials: Vec<SurfaceMaterial>,
     pub accelerator: CwBvh,
@@ -44,37 +44,37 @@ impl Scene {
             .flatten()
             .collect();
 
-        let gpu_triangles: Vec<RtCompressedTriangle> = obj
-            .iter()
-            .map(|model| {
-                let positions = &model.mesh.positions;
+        // let gpu_triangles: Vec<RtCompressedTriangle> = obj
+        //     .iter()
+        //     .map(|model| {
+        //         let positions = &model.mesh.positions;
 
-                let mesh_tris = model
-                    .mesh
-                    .indices
-                    .chunks_exact(3)
-                    .enumerate()
-                    .filter_map(|(_chunk_index, indicies)| {
-                        // Materials are saved in a separate iterator.
+        //         let mesh_tris = model
+        //             .mesh
+        //             .indices
+        //             .chunks_exact(3)
+        //             .enumerate()
+        //             .filter_map(|(_chunk_index, indicies)| {
+        //                 // Materials are saved in a separate iterator.
 
-                        let i0 = (indicies[0] as usize) * 3;
-                        let i1 = (indicies[1] as usize) * 3;
-                        let i2 = (indicies[2] as usize) * 3;
+        //                 let i0 = (indicies[0] as usize) * 3;
+        //                 let i1 = (indicies[1] as usize) * 3;
+        //                 let i2 = (indicies[2] as usize) * 3;
 
-                        let v0 = Vec3A::new(positions[i0], positions[i0 + 1], positions[i0 + 2]);
-                        let v1 = Vec3A::new(positions[i1], positions[i1 + 1], positions[i1 + 2]);
-                        let v2 = Vec3A::new(positions[i2], positions[i2 + 1], positions[i2 + 2]);
+        //                 let v0 = Vec3A::new(positions[i0], positions[i0 + 1], positions[i0 + 2]);
+        //                 let v1 = Vec3A::new(positions[i1], positions[i1 + 1], positions[i1 + 2]);
+        //                 let v2 = Vec3A::new(positions[i2], positions[i2 + 1], positions[i2 + 2]);
 
-                        Some(RtCompressedTriangle::new(v0, v1, v2))
-                    })
-                    .collect::<Vec<RtCompressedTriangle>>();
+        //                 Some(RtCompressedTriangle::new(v0, v1, v2))
+        //             })
+        //             .collect::<Vec<RtCompressedTriangle>>();
 
-                mesh_tris
-            })
-            .collect::<Vec<Vec<RtCompressedTriangle>>>()
-            .into_iter()
-            .flatten()
-            .collect();
+        //         mesh_tris
+        //     })
+        //     .collect::<Vec<Vec<RtCompressedTriangle>>>()
+        //     .into_iter()
+        //     .flatten()
+        //     .collect();
 
         let triangles: Vec<RtTriangle> = obj
             .iter()
@@ -114,9 +114,15 @@ impl Scene {
             })
             .collect();
 
+        println!("original layout:");
+        accelerator.validate(&triangles, false);
+
+        println!("direct/reordered layout:");
+        accelerator.validate(&accelerator_id_to_tri, true);
+
         Scene {
             triangles,
-            gpu_triangles,
+            // gpu_triangles,
             material_indicies,
             materials,
             accelerator,
@@ -135,7 +141,7 @@ impl Scene {
 
         // 1. Write all vertices
         // We use the original triangles list to ensure we have a stable vertex set
-        for tri in &self.triangles {
+        for tri in &self.accelerator_id_to_tri {
             for v in [tri.v0, tri.v0 - tri.e1, tri.v0 + tri.e2] {
                 writeln!(writer, "v {} {} {}", v.x, v.y, v.z)?;
             }

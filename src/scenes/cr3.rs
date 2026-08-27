@@ -7,7 +7,16 @@ pub fn load_bras_cr3() -> Scene {
     fn root(ext: &str) -> PathBuf {
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path.push(PathBuf::from(
-            "../../_TU_BERLIN_ACOUSTIC_BENCHES/1_scene_descriptions-CR3/_WORKING_DIR",
+            "../_TU_BERLIN_ACOUSTIC_BENCHES/1_scene_descriptions-CR3/1 Scene descriptions/CR3 medium room (chamber music hall)",
+        ));
+        path.push(PathBuf::from(ext));
+        path
+    }
+
+    fn mat_root(ext: &str) -> PathBuf {
+        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.push(PathBuf::from(
+            "../_TU_BERLIN_ACOUSTIC_BENCHES/3_surface_descriptions/_csv/fitted_estimates",
         ));
         path.push(PathBuf::from(ext));
         path
@@ -21,28 +30,28 @@ pub fn load_bras_cr3() -> Scene {
     // TODO: This is not the case anymore.
 
     // mat_CR3_plaster
-    let mat3 = SurfaceMaterial::from_csv(&root("mat_CR3_plaster.csv"));
+    let mat1 = SurfaceMaterial::from_csv(&mat_root("mat_CR3_plaster.csv"));
 
     // mat_CR3_stagePanels
-    let mat4 = SurfaceMaterial::from_csv(&root("mat_CR3_stagePanels.csv"));
+    let mat2 = SurfaceMaterial::from_csv(&mat_root("mat_CR3_stagePanels.csv"));
 
     // mat_CR3_structuredPlaster
-    let mat5 = SurfaceMaterial::from_csv(&root("mat_CR3_structuredPlaster.csv"));
+    let mat3 = SurfaceMaterial::from_csv(&mat_root("mat_CR3_structuredPlaster.csv"));
 
     // mat_CR3_floor
-    let mat6 = SurfaceMaterial::from_csv(&root("mat_CR3_floor.csv"));
+    let mat4 = SurfaceMaterial::from_csv(&mat_root("mat_CR3_floor.csv"));
 
     // mat_CR3_ceiling
-    let mat7 = SurfaceMaterial::from_csv(&root("mat_CR3_ceiling.csv"));
+    let mat5 = SurfaceMaterial::from_csv(&mat_root("mat_CR3_ceiling.csv"));
 
     // mat_CR3_windows
-    let mat8 = SurfaceMaterial::from_csv(&root("mat_CR3_windows.csv"));
+    let mat6 = SurfaceMaterial::from_csv(&mat_root("mat_CR3_windows.csv"));
 
     // mat_CR3_seating
-    let mat9 = SurfaceMaterial::from_csv(&root("mat_CR3_seating.csv"));
+    let mat7 = SurfaceMaterial::from_csv(&mat_root("mat_CR3_seating.csv"));
 
     let (obj, _materials) = tobj::load_obj(
-        &root("CR3_BRIR.obj"),
+        &root("Geometry/CR3_BRIR_CLEANED.obj"),
         &tobj::LoadOptions {
             single_index: false,
             triangulate: true,
@@ -52,7 +61,7 @@ pub fn load_bras_cr3() -> Scene {
     )
     .expect("Failed to load CR3_BRIR model");
 
-    let scene = Scene::from_obj(obj, vec![mat3, mat4, mat5, mat6, mat7, mat8, mat9]);
+    let scene = Scene::from_obj(obj, vec![mat1, mat2, mat3, mat4, mat5, mat6, mat7]);
 
     scene
 }

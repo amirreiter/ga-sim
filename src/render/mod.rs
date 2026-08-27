@@ -1,6 +1,6 @@
 use crate::simulation::EnergyHistogram;
 
-use rand::{Rng, RngExt};
+use rand::{Rng, RngExt, random};
 use rustfft::{Fft, FftPlanner, num_complex::Complex32};
 use std::sync::Arc;
 
@@ -273,6 +273,10 @@ pub fn render(
     room_volume: f32,
     speed_of_sound: f32,
 ) -> Vec<f32> {
+    for (_, histogram) in energy_histograms.iter_mut() {
+        histogram.resample_linear(sample_rate);
+    }
+
     if energy_histograms.is_empty() || sample_rate <= 0.0 {
         return Vec::new();
     }
@@ -289,12 +293,17 @@ pub fn render(
         return Vec::new();
     }
 
-    let dirac_sequence = generate_dirac_sequence(
-        sample_rate,
-        histogram_seconds,
-        speed_of_sound,
-        room_volume,
-    );
+    // White noise seems more accuracy than dirac sequence.
+    let mut white_noise =
+        vec![0.0; (sample_rate * histogram_seconds) as usize];
+    white_noise.iter_mut().for_each(|s| *s = (random::<f32>() - 0.5) * 2.0);
+    // let mut dirac_sequence =
+    // generate_dirac_sequence(
+    //     sample_rate,
+    //     histogram_seconds,
+    //     speed_of_sound,
+    //     room_volume,
+    // );
 
     let render_samples = core::cmp::min(
         energy_histograms
@@ -302,7 +311,7 @@ pub fn render(
             .map(|(_, h)| convert_index(h.inner.len(), sample_rate, h.sample_rate))
             .min()
             .unwrap_or(0),
-        dirac_sequence.len(),
+        white_noise.len(),
     );
 
     if render_samples == 0 {
@@ -329,7 +338,7 @@ pub fn render(
     for (index, (freq, histogram)) in energy_histograms.iter().enumerate() {
         let weighted = weight_sequence_for_band(
             histogram,
-            &dirac_sequence,
+            &white_noise,
             sample_rate,
             400.0
         );

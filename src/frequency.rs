@@ -5,6 +5,10 @@ pub trait SimulationFrequency {
 
     fn air_alpha() -> f32;
 
+    fn air_decay_multiplier(distance_m: f32) -> f32 {
+        (-Self::air_alpha() * distance_m).exp()
+    }
+
     fn ac(material: &SurfaceMaterial) -> f32;
 
     fn sc(material: &SurfaceMaterial) -> f32;
@@ -24,40 +28,101 @@ macro_rules! define_simulation_frequency {
 
                 #[inline(always)]
                 fn air_alpha() -> f32 {
-                    // rust-analyzer does not handle this kind of macro stuff well,
-                    // but we must satisfy the skeleton of the function so as a workaround
-                    // we make rust_analyzer think the frequency alpha value is always -1.0
-                    //
-                    // The test uses this to check if crabtime is working or not.
                     #[cfg(not(test))]
                     {
-                        // This is from ISO 9613-1:1993
                         crabtime::eval! {{
-                            // primary inputs
-                            let f: f32 = $hz as f32; // hz
-                            let temp: f32 = 20.0; // celsius
-                            let hum: f32 = 0.5; // percentage
+                            // ISO 9613-1:1993 atmospheric absorption.
+                            //
+                            // Returns an exponential AMPLITUDE attenuation coefficient [1/m],
+                            // suitable for:
+                            //
+                            //     gain *= exp(-air_alpha * distance_m)
+                            //
+                            // A gain of 0.5 corresponds to approximately -6.02 dB.
 
-                            let pr = 101.325;
-                            let t_0 = 293.15;
-                            let pa = 101.325;
+                            let f: f32 = $hz as f32; // Hz
+                            let temp: f32 = 20.0;    // °C
+                            let hum: f32 = 0.5;      // relative humidity: 0.0 .. 1.0
+
+                            const P_REF: f32 = 101.325; // kPa
+                            const T_REF: f32 = 293.15;  // K
+                            const T_TRIPLE: f32 = 273.16; // K
+
+                            let pressure = 101.325; // kPa
                             let t = temp + 273.15;
-                            let tr_ratio = t / t_0;
-                            let psat_pr = 10.0f32.powf(-6.8346 * (273.16 / t).powf(1.261) + 4.6151);
-                            let h = hum * 100.0 * psat_pr / (pa / pr);
-                            let f_ro = (pa / pr) * (24.0 + 4.04e4 * h * (0.02 + h) / (0.391 + h));
-                            let f_rn = (pa / pr)
-                                * tr_ratio.sqrt().recip()
-                                * (9.0 + 280.0 * h * (-4.17 * (tr_ratio.powf(-1.0 / 3.0) - 1.0)).exp());
-                            let alpha_db = 8.686
-                                * f.powi(2)
-                                * ((1.84e-11 * (pa / pr).recip() * tr_ratio.sqrt())
-                                    + tr_ratio.powf(-2.5)
-                                        * ((0.01278 * (-2239.1 / t).exp()) / (f_ro + (f.powi(2) / f_ro))
-                                            + (0.1068 * (-3352.0 / t).exp()) / (f_rn + (f.powi(2) / f_rn))));
+                            let tr = t / T_REF;
+                            let pr = pressure / P_REF;
 
-                            // Convert dB energy loss to relative energy per meter
-                            10.0f32.powf(-alpha_db / 20.0f32)
+                            // Saturation vapour pressure divided by reference pressure.
+                            let psat_over_pref =
+                                10.0f32.powf(
+                                    -6.8346 * (T_TRIPLE / t).powf(1.261)
+                                    + 4.6151
+                                );
+
+                            // Molar concentration of water vapour, in percent.
+                            //
+                            // hum is 0..1, so multiply by 100 to obtain RH percent.
+                            let h =
+                                hum * 100.0 * psat_over_pref / pr;
+
+                            // Oxygen relaxation frequency.
+                            let f_ro =
+                                pr
+                                * (
+                                    24.0
+                                    + 4.04e4
+                                        * h
+                                        * (0.02 + h)
+                                        / (0.391 + h)
+                                );
+
+                            // Nitrogen relaxation frequency.
+                            let f_rn =
+                                pr
+                                * tr.powf(-0.5)
+                                * (
+                                    9.0
+                                    + 280.0
+                                        * h
+                                        * (
+                                            -4.17
+                                                * (
+                                                    tr.powf(-1.0 / 3.0)
+                                                    - 1.0
+                                                )
+                                        ).exp()
+                                );
+
+                            let f2 = f * f;
+
+                            // Atmospheric attenuation in dB/m.
+                            let alpha_db =
+                                8.686
+                                * f2
+                                * (
+                                    1.84e-11
+                                        * pr.recip()
+                                        * tr.sqrt()
+                                    +
+                                    tr.powf(-2.5)
+                                        * (
+                                            0.01275
+                                                * (-2239.1 / t).exp()
+                                                / (f_ro + f2 / f_ro)
+                                            +
+                                            0.1068
+                                                * (-3352.0 / t).exp()
+                                                / (f_rn + f2 / f_rn)
+                                        )
+                                );
+
+                            // Convert dB/m to exponential amplitude attenuation [1/m].
+                            //
+                            // exp(-alpha * d)
+                            // =
+                            // 10^(-alpha_db * d / 20)
+                            alpha_db * std::f32::consts::LN_10 / 20.0
                         }}
                     }
 

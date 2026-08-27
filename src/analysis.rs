@@ -247,7 +247,7 @@ pub fn analyze_and_plot_energy_deviation_from_histograms(
         // Accumulate bench energy per band and total
         let mut bench_band_en = vec![0.0f32; OCTAVE_CENTERS.len()];
         let mut bench_total_en = 0.0f32;
-        for bin in 0..(window_size / 2) {
+        for bin in 0..=(window_size / 2) {
             let freq = bin as f32 * sample_rate / window_size as f32;
             let power = bench_complex[bin].norm_sqr();
             bench_total_en += power;
