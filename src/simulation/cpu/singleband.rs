@@ -5,7 +5,10 @@ use std::{
 
 use glam::Vec3A;
 use obvhs::ray::{Ray, RayHit};
-use rand::{RngExt, rngs::ThreadRng};
+use rand::{
+    RngExt, SeedableRng,
+    rngs::{StdRng, ThreadRng},
+};
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use thread_local::ThreadLocal;
 
@@ -38,24 +41,26 @@ pub fn cpu_rt_stochastic_singleband<F: SimulationFrequency>(
         // simulation in parallel.
 
         let tl_histogram: Arc<ThreadLocal<RefCell<EnergyHistogram>>> = Arc::new(ThreadLocal::new());
-        iter.into_par_iter().for_each_init(
+        iter.into_iter().enumerate().par_bridge().for_each_init(
             || tl_histogram.clone(),
-            |histogram_handle, seed_direction: Vec3A| {
+            |histogram_handle, (ray_index, seed_direction)| {
                 let local_histogram = histogram_handle.get_or(|| {
                     RefCell::new(EnergyHistogram::new(histogram_bin_count, sample_rate))
                 });
 
                 let seed_dir = seed_direction.normalize();
-
                 let seed_ray = Ray::new_inf(emitter, seed_dir);
 
-                kernel_rt_stochastic_single_band::<F, true>(
-                    &scene,
-                    &microphone,
+                let mut rng = StdRng::seed_from_u64(123u64.wrapping_add(ray_index as u64));
+
+                kernel_rt_stochastic_single_band::<F, false>(
+                    scene,
+                    microphone,
                     &mut *local_histogram.borrow_mut(),
                     seed_ray,
                     1.0,
                     0.0,
+                    &mut rng,
                 );
             },
         );
@@ -102,13 +107,14 @@ pub fn cpu_rt_stochastic_singleband<F: SimulationFrequency>(
 
             let seed_ray = Ray::new_inf(emitter, seed_dir);
 
-            kernel_rt_stochastic_single_band::<F, true>(
+            kernel_rt_stochastic_single_band::<F, false>(
                 &scene,
                 &microphone,
                 &mut histogram,
                 seed_ray,
                 1.0,
                 0.0,
+                &mut StdRng::seed_from_u64(123),
             );
         });
 
@@ -123,6 +129,7 @@ fn kernel_rt_stochastic_single_band<F: SimulationFrequency, const MICROPHONE_COL
     in_ray: Ray,
     in_energy: f32,
     in_distance: f32,
+    rng: &mut StdRng,
 ) {
     // 1. Determine if we hit the microphone on our way to wherever we land.
 
@@ -146,13 +153,16 @@ fn kernel_rt_stochastic_single_band<F: SimulationFrequency, const MICROPHONE_COL
     }
 
     // 3. If we hit a microphone before ray-scene impact, log the energy.
-
-    if distance_to_mic < hit.t {
+    // This can be disabled for rays that are children of diffuse rays, who
+    // already have diffuse rain. This prevents double counting.
+    if MICROPHONE_COLLISION && distance_to_mic < hit.t {
         let bucket = (((in_distance + distance_to_mic) / SPEED_OF_SOUND) * histogram.sample_rate)
             .round() as usize;
 
         if bucket < histogram.inner.len() {
-            histogram.inner[bucket] += in_energy * F::air_decay_multiplier(in_distance + distance_to_mic);
+            histogram.inner[bucket] += in_energy
+                * F::air_decay_multiplier(in_distance + distance_to_mic)
+                * microphone.amplitude_multiplier_normalized(in_ray.direction);
         } else {
             DEBUG_MIC_HITS_OUT_OF_BOUNDS.fetch_add(1, Relaxed);
         }
@@ -162,7 +172,7 @@ fn kernel_rt_stochastic_single_band<F: SimulationFrequency, const MICROPHONE_COL
 
     let material = &scene.accelerator_id_to_material[hit.primitive_id as usize];
 
-    let mut out_energy = in_energy * (1.0 - F::ac(material));
+    let out_energy = in_energy * (1.0 - F::ac(material));
 
     if out_energy < ENERGY_CUTOFF {
         return;
@@ -186,8 +196,6 @@ fn kernel_rt_stochastic_single_band<F: SimulationFrequency, const MICROPHONE_COL
     let out_ray_origin = in_ray.origin + in_ray.direction * (hit.t - 1e-4) + normal * 1e-4;
 
     // Determine what species the next ray should be
-    let mut rng = ThreadRng::default();
-
     if F::sc(material) > rng.random::<f32>() {
         // The next ray should be a scattered ray.
 
@@ -199,7 +207,6 @@ fn kernel_rt_stochastic_single_band<F: SimulationFrequency, const MICROPHONE_COL
                 let return_dir = (microphone.position - out_ray_origin).normalize();
 
                 // Diffuse scattering only exists in the outward hemisphere.
-                // Do NOT use abs() here.
                 let cos_theta = normal.dot(return_dir).max(0.0);
 
                 if cos_theta > 0.0 {
@@ -238,7 +245,10 @@ fn kernel_rt_stochastic_single_band<F: SimulationFrequency, const MICROPHONE_COL
 
                             let receiver_factor = cos_theta * radius_ratio * radius_ratio;
 
-                            histogram.inner[bucket] += out_energy * receiver_factor * F::air_decay_multiplier(out_distance + return_distance);
+                            histogram.inner[bucket] += out_energy
+                                * receiver_factor
+                                * F::air_decay_multiplier(out_distance + return_distance)
+                                * microphone.amplitude_multiplier_normalized(return_dir);
                         } else {
                             DEBUG_MIC_HITS_OUT_OF_BOUNDS.fetch_add(1, Relaxed);
                         }
@@ -247,7 +257,7 @@ fn kernel_rt_stochastic_single_band<F: SimulationFrequency, const MICROPHONE_COL
             }
         }
 
-        let out_ray_direction = sample_cosine_weighted_hemisphere(normal, &mut rng);
+        let out_ray_direction = sample_cosine_weighted_hemisphere(normal, rng);
 
         let out_ray = Ray::new_inf(out_ray_origin, out_ray_direction);
 
@@ -258,6 +268,7 @@ fn kernel_rt_stochastic_single_band<F: SimulationFrequency, const MICROPHONE_COL
             out_ray,
             out_energy,
             out_distance,
+            rng,
         );
     } else {
         // The next ray should be a specular ray
@@ -272,6 +283,7 @@ fn kernel_rt_stochastic_single_band<F: SimulationFrequency, const MICROPHONE_COL
             out_ray,
             out_energy,
             out_distance,
+            rng,
         );
     }
 }

@@ -1,6 +1,6 @@
 // mod rt_specular;
-mod shared;
 mod cpu;
+mod shared;
 // mod trace;
 // mod rt_diffuse;
 

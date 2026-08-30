@@ -4,11 +4,14 @@ use glam::Vec3A;
 use hound::{self, WavReader};
 
 use crate::{
-    analysis::analyze_and_plot_energy_deviation, frequency::*, microphone::Microphone,
-    render::render, scenes::Scene, simulation::*,
+    ambisonics::render_ambisonics, analysis::analyze_and_plot_energy_deviation,
+    caviar::ambisonic_b_to_caviar_14x2, frequency::*, microphone::Microphone, render::render,
+    scenes::Scene, simulation::*,
 };
 
+mod ambisonics;
 mod analysis;
+mod caviar;
 mod fibonacci;
 mod frequency;
 mod material;
@@ -36,14 +39,45 @@ fn estimate_scene_aabb_volume(scene: &Scene) -> f32 {
 }
 
 fn main() {
+    ambisonic_b_to_caviar_14x2(
+        "/Users/amirreiter/Github/amirreiter/ga-sim/AmbiX_B_ACN_SN3D.wav".into(),
+        "/Users/amirreiter/Github/amirreiter/ga-sim/caviar".into(),
+    )
+    .unwrap();
+    // render_ambisonics(Vec3A::new(-6.33102, 0.0, 2.83734), Vec3A::new(-6.33102, 0.0, 2.83734));
+
+    println!(
+        "leaks        : {}",
+        DEBUG_LEAK_COUNTER.load(Ordering::SeqCst),
+    );
+    // println!(
+    //     "    {:.2}% success rate",
+    //     100.0 - (DEBUG_LEAK_COUNTER.load(Ordering::SeqCst) as f32 / (rays as f32 * 9.0)) * 100.0
+    // );
+    println!(
+        "histogram oob: {}    /    {}",
+        DEBUG_MIC_HITS_OUT_OF_BOUNDS.load(Ordering::SeqCst),
+        DEBUG_MIC_HITS.load(Ordering::SeqCst)
+    );
+    // println!(
+    //     "    {:.2}%",
+    //     (DEBUG_MIC_HITS_OUT_OF_BOUNDS.load(Ordering::SeqCst) as f32
+    //         / DEBUG_MIC_HITS.load(Ordering::SeqCst) as f32)
+    //         * 100.0
+    // );
+
+    return;
+
     let scene = scenes::cr3::load_bras_cr3();
 
-    let mic = Microphone {
-        position: Vec3A::new(6.08988, 0.0, 1.43685),
-    };
+    let mic = Microphone::new(
+        Vec3A::new(6.08988, 0.0, 1.43685),
+        Vec3A::ZERO,
+        microphone::DirectivityPattern::Omni,
+    );
 
-    let sample_rate = 44_100.0 / 1.0; //(44.1 / 4.0);
-    let rays = 1_000_000u64;
+    let sample_rate = 44_100.0 / (1.0); //(44.1 / 4.0);
+    let rays = 2_000_000u64;
     let bins = (sample_rate * 3.5) as usize;
 
     let spec = hound::WavSpec {
@@ -95,27 +129,6 @@ fn main() {
 
     let mut energy_histograms = combined;
 
-    println!(
-        "leaks        : {}    /    {}",
-        DEBUG_LEAK_COUNTER.load(Ordering::SeqCst),
-        rays * 9
-    );
-    println!(
-        "    {:.2}% success rate",
-        100.0 - (DEBUG_LEAK_COUNTER.load(Ordering::SeqCst) as f32 / (rays as f32 * 9.0)) * 100.0
-    );
-    println!(
-        "histogram oob: {}    /    {}",
-        DEBUG_MIC_HITS_OUT_OF_BOUNDS.load(Ordering::SeqCst),
-        DEBUG_MIC_HITS.load(Ordering::SeqCst)
-    );
-    println!(
-        "    {:.2}%",
-        (DEBUG_MIC_HITS_OUT_OF_BOUNDS.load(Ordering::SeqCst) as f32
-            / DEBUG_MIC_HITS.load(Ordering::SeqCst) as f32)
-            * 100.0
-    );
-
     // let ehc = energy_histograms.clone();
 
     let samples = render(
@@ -133,6 +146,7 @@ fn main() {
         ],
         estimate_scene_aabb_volume(&scene),
         343.0,
+        true,
     );
 
     // let mut energy_histograms = ehc;

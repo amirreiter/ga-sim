@@ -1,8 +1,11 @@
 use crate::simulation::EnergyHistogram;
 
-use rand::{Rng, RngExt, random};
+use rand::{
+    Rng, RngExt, SeedableRng, random,
+    rngs::{StdRng, ThreadRng},
+};
 use rustfft::{Fft, FftPlanner, num_complex::Complex32};
-use std::sync::Arc;
+use std::{sync::Arc, thread::Thread};
 
 const MU_MAX_HZ: f64 = 10_000.0;
 const CROSSOVER_OVERLAP: f32 = 1.0;
@@ -66,11 +69,7 @@ fn crossover_width_factor(lowest_hz: f32, highest_hz: f32, band_count: usize) ->
     }
 
     let x = (highest_hz / lowest_hz).powf(1.0 / band_count as f32);
-    if x <= 1.0 {
-        0.0
-    } else {
-        (x - 1.0) / (x + 1.0)
-    }
+    if x <= 1.0 { 0.0 } else { (x - 1.0) / (x + 1.0) }
 }
 
 fn crossover_phase(p: f32, width_hz: f32, steepness: usize) -> f32 {
@@ -272,6 +271,7 @@ pub fn render(
     mut energy_histograms: Vec<(f32, EnergyHistogram)>,
     room_volume: f32,
     speed_of_sound: f32,
+    normalize: bool,
 ) -> Vec<f32> {
     for (_, histogram) in energy_histograms.iter_mut() {
         histogram.resample_linear(sample_rate);
@@ -293,10 +293,13 @@ pub fn render(
         return Vec::new();
     }
 
+    let mut rng = ThreadRng::default();
+
     // White noise seems more accuracy than dirac sequence.
-    let mut white_noise =
-        vec![0.0; (sample_rate * histogram_seconds) as usize];
-    white_noise.iter_mut().for_each(|s| *s = (random::<f32>() - 0.5) * 2.0);
+    let mut white_noise = vec![0.0; (sample_rate * histogram_seconds) as usize];
+    white_noise
+        .iter_mut()
+        .for_each(|s| *s = (rng.random::<f32>() - 0.5) * 2.0);
     // let mut dirac_sequence =
     // generate_dirac_sequence(
     //     sample_rate,
@@ -336,12 +339,7 @@ pub fn render(
     let ifft = planner.plan_fft_inverse(render_samples);
 
     for (index, (freq, histogram)) in energy_histograms.iter().enumerate() {
-        let weighted = weight_sequence_for_band(
-            histogram,
-            &white_noise,
-            sample_rate,
-            400.0
-        );
+        let weighted = weight_sequence_for_band(histogram, &white_noise, sample_rate, 400.0);
 
         let mut band_signal = vec![0.0f32; render_samples];
         let copy_len = core::cmp::min(render_samples, weighted.len());
@@ -354,9 +352,11 @@ pub fn render(
         }
     }
 
-    let peak = result.iter().map(|s| s.abs()).fold(0.0f32, f32::max);
-    if peak > 1.0 {
-        result.iter_mut().for_each(|s| *s /= peak);
+    if normalize {
+        let peak = result.iter().map(|s| s.abs()).fold(0.0f32, f32::max);
+        if peak > 1.0 {
+            result.iter_mut().for_each(|s| *s /= peak);
+        }
     }
 
     result

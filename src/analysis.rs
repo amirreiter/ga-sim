@@ -98,8 +98,8 @@ pub fn analyze_and_plot_energy_deviation(
     }
 
     // We can auto fit, but data beyond the 60dB range is not super helpful
-    let min_y = -60.0f32;//all_values.iter().fold(f32::INFINITY, |a, &b| a.min(b));
-    let max_y = 60.0f32;//all_values.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+    let min_y = -60.0f32; //all_values.iter().fold(f32::INFINITY, |a, &b| a.min(b));
+    let max_y = 60.0f32; //all_values.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
 
     let root =
         BitMapBackend::new("Simulation_Energy_Deviation.png", (1920, 1080)).into_drawing_area();

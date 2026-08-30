@@ -80,16 +80,20 @@ impl Scene {
             .iter()
             .flat_map(|model| {
                 let positions = &model.mesh.positions;
-                model.mesh.indices.chunks_exact(3).map(|indices| {
-                    let i0 = (indices[0] as usize) * 3;
-                    let i1 = (indices[1] as usize) * 3;
-                    let i2 = (indices[2] as usize) * 3;
-                    let v0 = Vec3A::new(positions[i0], positions[i0+1], positions[i0+2]);
-                    let v1 = Vec3A::new(positions[i1], positions[i1+1], positions[i1+2]);
-                    let v2 = Vec3A::new(positions[i2], positions[i2+1], positions[i2+2]);
-                    RtTriangle::new(v0, v1, v2)
-                })
-                .collect::<Vec<_>>()
+                model
+                    .mesh
+                    .indices
+                    .chunks_exact(3)
+                    .map(|indices| {
+                        let i0 = (indices[0] as usize) * 3;
+                        let i1 = (indices[1] as usize) * 3;
+                        let i2 = (indices[2] as usize) * 3;
+                        let v0 = Vec3A::new(positions[i0], positions[i0 + 1], positions[i0 + 2]);
+                        let v1 = Vec3A::new(positions[i1], positions[i1 + 1], positions[i1 + 2]);
+                        let v2 = Vec3A::new(positions[i2], positions[i2 + 1], positions[i2 + 2]);
+                        RtTriangle::new(v0, v1, v2)
+                    })
+                    .collect::<Vec<_>>()
             })
             .collect();
 

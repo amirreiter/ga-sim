@@ -20,9 +20,12 @@ impl EnergyHistogram {
 
     pub fn add(&mut self, rhs: &Self) {
         if self.sample_rate == rhs.sample_rate {
-            self.inner.iter_mut().zip(rhs.inner.iter()).for_each(|(s, rhs)| {
-                *s += rhs;
-            });
+            self.inner
+                .iter_mut()
+                .zip(rhs.inner.iter())
+                .for_each(|(s, rhs)| {
+                    *s += rhs;
+                });
         } else {
             todo!()
         }
